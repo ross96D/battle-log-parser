@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/ross96D/cwbattle_parser/parser"
-	"github.com/ross96D/cwbattle_parser/server"
+	"github.com/ross96D/battle-log-parser/parser"
+	"github.com/ross96D/battle-log-parser/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

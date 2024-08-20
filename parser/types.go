@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/ross96D/cwbattle_parser/assert"
+	"github.com/ross96D/battle-log-parser/assert"
 	"golang.org/x/net/html"
 )
 

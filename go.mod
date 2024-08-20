@@ -1,4 +1,4 @@
-module github.com/ross96D/cwbattle_parser
+module github.com/ross96D/battle-log-parser
 
 go 1.22.0
 

@@ -7,7 +7,7 @@ import (
 	"net/url"
 
 	"github.com/labstack/echo/v4"
-	"github.com/ross96D/cwbattle_parser/parser"
+	"github.com/ross96D/battle-log-parser/parser"
 	"github.com/rs/zerolog/log"
 )
 
