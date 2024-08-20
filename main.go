@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"slices"
+	"strconv"
 
 	"github.com/ross96D/cwbattle_parser/parser"
 	"github.com/ross96D/cwbattle_parser/server"
@@ -73,7 +74,8 @@ var cliCommand = cobra.Command{
 var serveCommand = cobra.Command{
 	Use: "serve",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := http.ListenAndServe(":9012", server.Server()); err != nil {
+		log.Debug().Msgf("Serving on %d", port)
+		if err := http.ListenAndServe(":"+strconv.FormatUint(uint64(port), 10), server.Server()); err != nil {
 			log.Panic().Err(err).Send()
 		}
 	},

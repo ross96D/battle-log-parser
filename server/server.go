@@ -25,7 +25,16 @@ const (
 func Server() *echo.Echo {
 	s := echo.New()
 
-	s.POST("/parse", parse)
+	s.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if err := next(c); err != nil {
+				return echo.NewHTTPError(400, err)
+			}
+			return nil
+		}
+	})
+
+	s.GET("/parse", parse)
 
 	return s
 }

@@ -35,7 +35,7 @@ func (t Team) String() string {
 }
 
 func (t Team) MarshalJSON() ([]byte, error) {
-	return []byte(t.String()), nil
+	return []byte("\"" + t.String() + "\""), nil
 }
 
 func (t *Team) UnmarshalJSON(b []byte) error {
