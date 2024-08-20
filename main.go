@@ -2,45 +2,89 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"runtime/pprof"
 	"slices"
 
 	"github.com/ross96D/cwbattle_parser/parser"
+	"github.com/ross96D/cwbattle_parser/server"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
+var path string
+var pprofPath string
+
+var port uint16
+
+func init() {
+	rootCommand.AddCommand(&cliCommand)
+	rootCommand.AddCommand(&serveCommand)
+
+	cliCommand.Flags().StringVarP(&path, "input", "i", "battle_log.log", "the html file of the battle log to read")
+	cliCommand.Flags().StringVar(&pprofPath, "pprof", "", "pprof file")
+
+	serveCommand.Flags().Uint16VarP(&port, "port", "p", 0, "set the port to listen on")
+	if err := serveCommand.MarkFlagRequired("port"); err != nil {
+		panic(err)
+	}
+}
+
+var rootCommand = cobra.Command{}
+
+var cliCommand = cobra.Command{
+	Use: "cli",
+	Run: func(cmd *cobra.Command, args []string) {
+		if pprofPath != "" {
+			f1, err := os.Create("default.pprof")
+			if err != nil {
+				panic(err)
+			}
+			err = pprof.StartCPUProfile(f1)
+			if err != nil {
+				panic(err)
+			}
+			defer pprof.StopCPUProfile()
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		battle, err := parser.Parse(f)
+		if err != nil {
+			panic(err)
+		}
+
+		m := battle.PlayerResume()
+		// TODO print on the stdout instead of the stderr
+		println("Battle resume by player")
+		for _, k := range sort(m) {
+			p := m[k]
+			println(k.Team.String(), "\t"+k.Name, "\tdone:", p.Damage, "\trecieved:", p.Tanqued, "\thits/total", fmt.Sprintf("%d/%d", p.Hits, p.Hits+p.Miss), fmt.Sprintf("%f%%", float64(p.Hits)/float64(p.Miss+p.Hits)), "\tCrits:", p.Crits)
+		}
+	},
+}
+
+var serveCommand = cobra.Command{
+	Use: "serve",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := http.ListenAndServe(":9012", server.Server()); err != nil {
+			log.Panic().Err(err).Send()
+		}
+	},
+}
+
 func main() {
-	f1, err := os.Create("default.pprof")
-	if err != nil {
-		panic(err)
-	}
-	err = pprof.StartCPUProfile(f1)
-	if err != nil {
-		panic(err)
-	}
-	defer pprof.StopCPUProfile()
+	log.Logger = log.Output(zerolog.NewConsoleWriter())
 
-	path := "battle_log.log"
-	if len(os.Args) == 2 {
-		path = os.Args[1]
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	battle, err := parser.Parse(f)
-	if err != nil {
-		panic(err)
-	}
-
-	m := battle.PlayerResume()
-	println("Battle resume by player")
-	for _, k := range sort(m) {
-		p := m[k]
-		println(k.Name, "\tdone:", p.Damage, "\trecieved:", p.Tanqued, "\thits/total", fmt.Sprintf("%d/%d", p.Hits, p.Hits+p.Miss), fmt.Sprintf("%f%%", float64(p.Hits)/float64(p.Miss+p.Hits)))
+	if err := rootCommand.Execute(); err != nil {
+		println(err.Error())
+		os.Exit(1)
 	}
 }
 

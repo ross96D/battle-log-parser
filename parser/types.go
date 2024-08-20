@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +34,31 @@ func (t Team) String() string {
 	}
 }
 
+func (t Team) MarshalJSON() ([]byte, error) {
+	return []byte(t.String()), nil
+}
+
+func (t *Team) UnmarshalJSON(b []byte) error {
+	s := strings.TrimFunc(string(b), func(r rune) bool {
+		return r == '"'
+	})
+	switch s {
+	case "Green":
+		*t = 'G'
+	case "Yellow":
+		*t = 'Y'
+	case "Red":
+		*t = 'R'
+	case "Blue":
+		*t = 'B'
+	case "Miss":
+		*t = 0
+	default:
+		return errors.New("invalid team " + string(b))
+	}
+	return nil
+}
+
 func TeamFromRune(r rune) Team {
 	switch r {
 	case yellowRune:
@@ -45,8 +71,8 @@ func TeamFromRune(r rune) Team {
 }
 
 type User struct {
-	Team Team
-	Name string
+	Team Team   `json:"team"`
+	Name string `json:"name"`
 }
 
 func (u User) String() string {
@@ -266,9 +292,9 @@ func ParseTurnNodes(nodes []*html.Node) []Turn {
 }
 
 type Strike struct {
-	Damage        int
-	TargetDefense int
-	Crit          bool
+	Damage        int  `json:"damage"`
+	TargetDefense int  `json:"target_defense"`
+	Crit          bool `json:"crit"`
 }
 
 func (s Strike) String() string {
@@ -284,9 +310,9 @@ func (s Strike) IsMiss() bool {
 }
 
 type Turn struct {
-	Attacker User
-	Target   User
-	Strikes  []Strike
+	Attacker User     `json:"atacker"`
+	Target   User     `json:"target"`
+	Strikes  []Strike `json:"strikes"`
 }
 
 func (t Turn) Misses() int {
@@ -301,6 +327,16 @@ func (t Turn) Misses() int {
 
 func (t Turn) Hits() int {
 	return len(t.Strikes) - t.Misses()
+}
+
+func (t Turn) Crits() int {
+	count := 0
+	for _, strike := range t.Strikes {
+		if strike.Crit {
+			count++
+		}
+	}
+	return count
 }
 
 func (t Turn) Damage() int {
@@ -403,8 +439,8 @@ func parseStrikeLine(line string) (strike Strike) {
 }
 
 type Battle struct {
-	Resume Resume
-	Turns  []Turn
+	Resume Resume `json:"resume"`
+	Turns  []Turn `json:"turns"`
 }
 
 func (b Battle) PlayerListWithDamage() map[User]int {
@@ -421,18 +457,23 @@ func (b Battle) PlayerListWithDamage() map[User]int {
 }
 
 type PlayerResume struct {
+	Team    Team
 	Damage  int
 	Tanqued int
 	Miss    int
 	Hits    int
+	Crits   int
 }
 
 func (pr PlayerResume) Add(other PlayerResume) PlayerResume {
+	assert.Assert(pr.Team == Team(0) || pr.Team == other.Team)
 	return PlayerResume{
+		Team:    pr.Team,
 		Damage:  pr.Damage + other.Damage,
 		Tanqued: pr.Tanqued + other.Tanqued,
 		Hits:    pr.Hits + other.Hits,
 		Miss:    pr.Miss + other.Miss,
+		Crits:   pr.Crits + other.Crits,
 	}
 }
 
@@ -441,16 +482,18 @@ func (b Battle) PlayerResume() map[User]PlayerResume {
 	for _, turn := range b.Turns {
 		r := result[turn.Attacker]
 		new := PlayerResume{
+			Team:   turn.Attacker.Team,
 			Damage: turn.Damage(),
 			Miss:   turn.Misses(),
 			Hits:   turn.Hits(),
+			Crits:  turn.Crits(),
 		}
 
 		result[turn.Attacker] = r.Add(new)
 
 		if !turn.Target.IsMiss() {
 			r = result[turn.Target]
-			result[turn.Target] = r.Add(PlayerResume{Tanqued: turn.Damage()})
+			result[turn.Target] = r.Add(PlayerResume{Tanqued: turn.Damage(), Team: turn.Target.Team})
 		}
 	}
 	return result
