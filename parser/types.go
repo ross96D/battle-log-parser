@@ -3,9 +3,11 @@ package parser
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ross96D/battle-log-parser/assert"
@@ -17,12 +19,29 @@ var greenRune, _ = utf8.DecodeRuneInString("🇲🇴")
 
 type Team byte
 
-func (t Team) String() string {
+func (t Team) Name() string {
 	switch t {
 	case 'G':
 		return "Green"
 	case 'Y':
 		return "Yellow"
+	case 'B':
+		return "Blue"
+	case 'R':
+		return "Red"
+	case 0:
+		return "Miss"
+	default:
+		panic("unknow team " + string(t))
+	}
+}
+
+func (t Team) String() string {
+	switch t {
+	case 'G':
+		return "🇲🇴"
+	case 'Y':
+		return "🇻🇦"
 	case 'B':
 		return "Blue"
 	case 'R':
@@ -43,9 +62,9 @@ func (t *Team) UnmarshalJSON(b []byte) error {
 		return r == '"'
 	})
 	switch s {
-	case "Green":
+	case "Green", "🇲🇴":
 		*t = 'G'
-	case "Yellow":
+	case "Yellow", "🇻🇦":
 		*t = 'Y'
 	case "Red":
 		*t = 'R'
@@ -215,6 +234,52 @@ func ParseResumeNode(n *html.Node) Resume {
 	}
 
 	return resp
+}
+
+func ParseIdentifierNode(n *html.Node) (time.Time, error) {
+	lines := getNodeLines(n)
+	assert.Assert(len(lines) == 1, "IdentifierNode have only one line %d", len(lines))
+	line := lines[0]
+	hour := []byte{}
+	date := []byte{}
+	onHour := true
+	for i := len(line) - 1; i >= 0; i-- {
+		char := line[i]
+		if onHour {
+			if char == ' ' {
+				onHour = false
+				continue
+			}
+			hour = append(hour, char)
+		} else {
+			if char == ' ' {
+				break
+			}
+			date = append(date, char)
+		}
+	}
+	slices.Reverse(date)
+	slices.Reverse(hour)
+	hourSplitted := bytes.Split(hour, []byte(":"))
+	dateSplitted := bytes.Split(date, []byte("-"))
+
+	hourNum, err := strconv.Atoi(string(hourSplitted[0]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("hour %w", err)
+	}
+	month, err := strconv.Atoi(string(dateSplitted[0]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("month %w", err)
+	}
+	day, err := strconv.Atoi(string(dateSplitted[1]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("day %w", err)
+	}
+
+	// TODO where can i take the year??
+	t := time.Date(2024, time.Month(month), day, hourNum, 0, 0, 0, time.FixedZone("UTC+2", 2*60*60))
+	t = t.UTC()
+	return t, nil
 }
 
 func ParseResumeTeams(lines []string) []ResumeTeam {
@@ -439,8 +504,9 @@ func parseStrikeLine(line string) (strike Strike) {
 }
 
 type Battle struct {
-	Resume Resume `json:"resume"`
-	Turns  []Turn `json:"turns"`
+	Resume Resume    `json:"resume"`
+	Turns  []Turn    `json:"turns"`
+	Date   time.Time `json:"date"`
 }
 
 func (b Battle) PlayerListWithDamage() map[User]int {
@@ -451,49 +517,6 @@ func (b Battle) PlayerListWithDamage() map[User]int {
 			result[turn.Attacker] = turn.Damage()
 		} else {
 			result[turn.Attacker] = r + turn.Damage()
-		}
-	}
-	return result
-}
-
-type PlayerResume struct {
-	Team    Team
-	Damage  int
-	Tanqued int
-	Miss    int
-	Hits    int
-	Crits   int
-}
-
-func (pr PlayerResume) Add(other PlayerResume) PlayerResume {
-	assert.Assert(pr.Team == Team(0) || pr.Team == other.Team)
-	return PlayerResume{
-		Team:    pr.Team,
-		Damage:  pr.Damage + other.Damage,
-		Tanqued: pr.Tanqued + other.Tanqued,
-		Hits:    pr.Hits + other.Hits,
-		Miss:    pr.Miss + other.Miss,
-		Crits:   pr.Crits + other.Crits,
-	}
-}
-
-func (b Battle) PlayerResume() map[User]PlayerResume {
-	result := make(map[User]PlayerResume, 0)
-	for _, turn := range b.Turns {
-		r := result[turn.Attacker]
-		new := PlayerResume{
-			Team:   turn.Attacker.Team,
-			Damage: turn.Damage(),
-			Miss:   turn.Misses(),
-			Hits:   turn.Hits(),
-			Crits:  turn.Crits(),
-		}
-
-		result[turn.Attacker] = r.Add(new)
-
-		if !turn.Target.IsMiss() {
-			r = result[turn.Target]
-			result[turn.Target] = r.Add(PlayerResume{Tanqued: turn.Damage(), Team: turn.Target.Team})
 		}
 	}
 	return result

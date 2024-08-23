@@ -29,6 +29,11 @@ func Parse(data io.ReadCloser) (b Battle, err error) {
 	identifierNode := cardList[1]
 	_ = identifierNode
 
+	b.Date, err = ParseIdentifierNode(cardList[1])
+	if err != nil {
+		return Battle{}, err
+	}
+
 	b.Resume = ParseResumeNode(resumeNode)
 	b.Turns = ParseTurnNodes(cardList[2 : len(cardList)-1])
 
