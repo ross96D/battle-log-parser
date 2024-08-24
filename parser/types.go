@@ -16,6 +16,7 @@ import (
 
 var yellowRune, _ = utf8.DecodeRuneInString("🇻🇦")
 var greenRune, _ = utf8.DecodeRuneInString("🇲🇴")
+var blueRune, _ = utf8.DecodeRuneInString("🇪🇺")
 
 type Team byte
 
@@ -43,7 +44,7 @@ func (t Team) String() string {
 	case 'Y':
 		return "🇻🇦"
 	case 'B':
-		return "Blue"
+		return "🇪🇺"
 	case 'R':
 		return "Red"
 	case 0:
@@ -68,7 +69,7 @@ func (t *Team) UnmarshalJSON(b []byte) error {
 		*t = 'Y'
 	case "Red":
 		*t = 'R'
-	case "Blue":
+	case "Blue", "🇪🇺":
 		*t = 'B'
 	case "Miss":
 		*t = 0
@@ -84,6 +85,8 @@ func TeamFromRune(r rune) Team {
 		return 'Y'
 	case greenRune:
 		return 'G'
+	case blueRune:
+		return 'B'
 	default:
 		panic("unidentify rune " + string(r))
 	}
