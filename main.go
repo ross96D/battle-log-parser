@@ -185,13 +185,19 @@ func FixedLenStr(str string, width uint) string {
 	nameLen := utf8.RuneCount(strB)
 	if nameLen > int(width) {
 		result := make([]byte, 0, width)
-		count := uint(0)
-		for _, r := range str {
-			if count == width {
+		for i, r := range str {
+			if i == int(width) {
 				break
 			}
-			result = utf8.AppendRune(result, r)
-			count++
+			if r < 128 {
+				result = utf8.AppendRune(result, r)
+			} else {
+				_, size := utf8.DecodeRuneInString(string(r))
+				if len(result)+size > int(width) {
+					break
+				}
+				result = utf8.AppendRune(result, r)
+			}
 		}
 		return string(result)
 	} else {

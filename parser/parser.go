@@ -1,9 +1,14 @@
 package parser
 
 import (
+	"bytes"
+	"fmt"
 	"io"
-	"strings"
+	"slices"
+	"strconv"
+	"time"
 
+	"github.com/ross96D/battle-log-parser/assert"
 	"golang.org/x/net/html"
 )
 
@@ -40,66 +45,48 @@ func Parse(data io.ReadCloser) (b Battle, err error) {
 	return
 }
 
-func attr(n *html.Node, key string) (string, bool) {
-	for _, attr := range n.Attr {
-		if attr.Key == key {
-			return attr.Val, true
-		}
-	}
-	return "", false
-}
-
-func find(n *html.Node, condition func(n *html.Node) bool) *html.Node {
-	if condition(n) {
-		return n
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		res := find(c, condition)
-		if res != nil {
-			return res
-		}
-	}
-	return nil
-}
-
-func findAll(n *html.Node, condition func(n *html.Node) bool, result []*html.Node) []*html.Node {
-	if result == nil {
-		result = make([]*html.Node, 0)
-	}
-
-	if condition(n) {
-		result = append(result, n)
-	}
-
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		result = findAll(c, condition, result)
-	}
-
-	return result
-}
-
-func forEach(n *html.Node, f func(n *html.Node)) {
-	f(n)
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		forEach(c, f)
-	}
-}
-
-func getNodeLines(n *html.Node) []string {
-	b := strings.Builder{}
-	forEach(n, func(n *html.Node) {
-		if n.Type == html.TextNode {
-			b.WriteString(n.Data)
-		}
-		if n.Type == html.ElementNode {
-			if n.Data == "br" {
-				b.WriteString("\n")
+func ParseIdentifierNode(n *html.Node) (time.Time, error) {
+	lines := getNodeLines(n)
+	assert.Assert(len(lines) == 1, "IdentifierNode have only one line %d", len(lines))
+	line := lines[0]
+	hour := []byte{}
+	date := []byte{}
+	onHour := true
+	for i := len(line) - 1; i >= 0; i-- {
+		char := line[i]
+		if onHour {
+			if char == ' ' {
+				onHour = false
+				continue
 			}
+			hour = append(hour, char)
+		} else {
+			if char == ' ' {
+				break
+			}
+			date = append(date, char)
 		}
-	})
+	}
+	slices.Reverse(date)
+	slices.Reverse(hour)
+	hourSplitted := bytes.Split(hour, []byte(":"))
+	dateSplitted := bytes.Split(date, []byte("-"))
 
-	lines := strings.Split(b.String(), "\n")
-	lines = removeEmptyLines(lines)
+	hourNum, err := strconv.Atoi(string(hourSplitted[0]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("hour %w", err)
+	}
+	month, err := strconv.Atoi(string(dateSplitted[0]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("month %w", err)
+	}
+	day, err := strconv.Atoi(string(dateSplitted[1]))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("day %w", err)
+	}
 
-	return lines
+	// TODO where can i take the year??
+	t := time.Date(2024, time.Month(month), day, hourNum, 0, 0, 0, time.FixedZone("UTC+2", 2*60*60))
+	t = t.UTC()
+	return t, nil
 }
