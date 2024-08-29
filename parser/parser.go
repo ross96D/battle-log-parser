@@ -30,11 +30,16 @@ func Parse(data io.ReadCloser) (b Battle, err error) {
 		return false
 	}, nil)
 
+	// missing resume and no card instead p
+	if len(cardList) == 2 {
+		return parseMissinResumeBattleLog(cardList[0])
+	}
+
 	resumeNode := cardList[0]
 	identifierNode := cardList[1]
 	_ = identifierNode
 
-	b.Date, err = ParseIdentifierNode(cardList[1])
+	b.Date, err = ParseIdentifierNode(identifierNode)
 	if err != nil {
 		return Battle{}, err
 	}
@@ -42,6 +47,21 @@ func Parse(data io.ReadCloser) (b Battle, err error) {
 	b.Resume = ParseResumeNode(resumeNode)
 	b.Turns = ParseTurnNodes(cardList[2 : len(cardList)-1])
 
+	return
+}
+
+func parseMissinResumeBattleLog(n *html.Node) (b Battle, err error) {
+	pList := findAll(n, func(n *html.Node) bool {
+		return n.Data == "p"
+	}, nil)
+
+	identifierNode := pList[0]
+	b.Date, err = ParseIdentifierNode(identifierNode)
+	if err != nil {
+		return Battle{}, err
+	}
+
+	b.Turns = ParseTurnNodes(pList[1 : len(pList)-1])
 	return
 }
 
