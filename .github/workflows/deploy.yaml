@@ -17,10 +17,10 @@ jobs:
           go-version: stable
 
       - name: Build
-        run: go build -o out/bin/chwarbot .
+        run: go build -o out/bin/parser .
 
       - name: Deploy
         uses: ross96D/updater-upload-action@v0.0.1
         with:
           urls: https://${{ secrets.DEPLOY_TOKEN }}@${{ secrets.DEPLOY_URL }}/update
-          fields: chwarbot=@out/bin/chwarbot
+          fields: parser=@out/bin/parser
