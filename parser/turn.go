@@ -3,7 +3,6 @@ package parser
 import (
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/ross96D/battle-log-parser/assert"
 	"golang.org/x/net/html"
@@ -28,7 +27,7 @@ func ParseTurnNode(n *html.Node) Turn {
 	}
 
 	targetLine := lines[1]
-	strikesLines := lines[2 : len(lines)-1]
+	strikesLines := strikeLines(lines[2:])
 
 	return Turn{
 		Attacker: parseAttackerLine(attackerLine),
@@ -67,34 +66,33 @@ func parseStrikesLines(lines []string) []Strike {
 	}
 	result := make([]Strike, 0, len(lines))
 	for _, line := range lines {
-		result = append(result, parseStrikeLine(line))
+		strike, ok := parseStrikeLine(line)
+		if !ok {
+			continue
+		}
+		result = append(result, strike)
 	}
 	return result
 }
 
-var weaknessStrike, _ = utf8.DecodeRuneInString("⚡️")
+func parseStrikeLine(line string) (Strike, bool) {
+	origLine := line
 
-func parseStrikeLine(line string) (strike Strike) {
-	if line == "miss!" {
-		return
-	}
-	r, size := utf8.DecodeRuneInString(line)
-	if r == weaknessStrike {
-		strike.Weakness = true
-		line = line[size:]
-		// it seems there is another character composing the ⚡️. Maybe is utf16 character
-		_, size = utf8.DecodeRuneInString(line)
-		if size >= 2 {
-			line = line[size:]
+	line, modifier := stripSymbols(line)
+	if modifier == counter {
+		index := strings.Index(line, "strike! dmg:")
+		// TODO miss on counter
+		if index == -1 {
+			return Strike{}, false
 		}
+		line = line[strings.Index(line, "strike! dmg:"):]
+	}
+	if line == "miss!" {
+		return Strike{}, true
 	}
 
-	line, ok := strings.CutPrefix(line, "strike! dmg: ")
-	if !ok {
-		line, ok = strings.CutPrefix(line, "crit strike! dmg: ")
-		strike.Crit = true
-		assert.Assert(ok, line)
-	}
+	line, ok := cutPrefixStrikeLines(line)
+	assert.Assert(ok, origLine)
 	splitted := strings.Split(line, ". Pdef was: ")
 	assert.Assert(len(splitted) == 2)
 
@@ -103,7 +101,93 @@ func parseStrikeLine(line string) (strike Strike) {
 	defense, err := strconv.Atoi(splitted[1])
 	assert.NoError(err)
 
+	strike := Strike{}
 	strike.Damage = dmg
 	strike.TargetDefense = defense
-	return
+	return strike, true
+}
+
+var symbols map[string]string = map[string]string{
+	"weaknessStrike": "⚡️",
+	"unkownWater":    "💦",
+	"unkownCruz":     "➕",
+	"counterAttack":  "🔄",
+}
+
+type attacksModifiers int
+
+func (attacksModifiers) fromStr(s string) attacksModifiers {
+	switch s {
+	case "weaknessStrike":
+		return weakness
+	case "unkownWater":
+		return unkown
+	case "unkownCruz":
+		return unkown
+	case "counterAttack":
+		return counter
+	default:
+		return unkown
+	}
+}
+
+const (
+	none attacksModifiers = iota - 1
+	unkown
+	weakness
+	counter
+)
+
+// TODO add value
+func stripSymbols(line string) (string, attacksModifiers) {
+	for k, v := range symbols {
+		l := len(v)
+		if l >= len(line) {
+			continue
+		}
+		prefix := line[0:l]
+		if v == prefix {
+			return line[l:], attacksModifiers(0).fromStr(k)
+		}
+	}
+	return line, none
+}
+
+func cutPrefixStrikeLines(line string) (string, bool) {
+	if line, ok := strings.CutPrefix(line, "strike! dmg: "); ok {
+		return line, true
+	}
+	if line, ok := strings.CutPrefix(line, "crit strike! dmg: "); ok {
+		return line, true
+	}
+	if line, ok := strings.CutPrefix(line, "💦strike! dmg: "); ok {
+		return line, true
+	}
+	if line, ok := strings.CutPrefix(line, "💦crit strike! dmg: "); ok {
+		return line, true
+	}
+	return line, false
+}
+
+func strikeLines(lines []string) []string {
+	end := len(lines)
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if hasFlagAtBegining(line) {
+			end--
+			continue
+		}
+		if strings.HasSuffix(line, "retrieved an arrow") {
+			end--
+			continue
+		}
+		break
+	}
+	assert.Assert(end > 0, strconv.Itoa(end)+": "+strings.Join(lines, "\n"))
+	return lines[:end]
+}
+
+func hasFlagAtBegining(line string) bool {
+	_, _, err := TeamFromRune(line)
+	return err == nil
 }

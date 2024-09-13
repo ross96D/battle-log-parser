@@ -6,17 +6,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ross96D/battle-log-parser/assert"
 )
 
-var yellowRune, _ = utf8.DecodeRuneInString("🇻🇦")
-var greenRune, _ = utf8.DecodeRuneInString("🇲🇴")
-var blueRune, _ = utf8.DecodeRuneInString("🇪🇺")
-var redRune, _ = utf8.DecodeRuneInString("🇮🇲")
-var monsterRuneOnTurn, _ = utf8.DecodeRuneInString("⚱️")
-var monsterRuneOnResume, _ = utf8.DecodeRuneInString("👹")
+var yellowRune = "🇻🇦"
+var greenRune = "🇲🇴"
+var blueRune = "🇪🇺"
+var redRune = "🇮🇲"
+var monsterRuneOnTurn = "⚱️"
+var monsterRuneOnResume = "👹"
 
 type Team byte
 
@@ -85,21 +84,34 @@ func (t *Team) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func TeamFromRune(r rune) Team {
-	switch r {
-	case yellowRune:
-		return 'Y'
-	case greenRune:
-		return 'G'
-	case blueRune:
-		return 'B'
-	case redRune:
-		return 'R'
-	case monsterRuneOnResume, monsterRuneOnTurn:
-		return 'M'
-	default:
-		panic("unidentify rune " + string(r))
+func TeamFromRune(r string) (Team, int, error) {
+	if strings.HasPrefix(r, yellowRune) {
+		return 'Y', len(yellowRune), nil
 	}
+	if strings.HasPrefix(r, greenRune) {
+		return 'G', len(greenRune), nil
+	}
+	if strings.HasPrefix(r, blueRune) {
+		return 'B', len(blueRune), nil
+	}
+	if strings.HasPrefix(r, redRune) {
+		return 'R', len(redRune), nil
+	}
+	if strings.HasPrefix(r, monsterRuneOnResume) {
+		return 'M', len(monsterRuneOnResume), nil
+	}
+	if strings.HasPrefix(r, monsterRuneOnTurn) {
+		return 'M', len(monsterRuneOnTurn), nil
+	}
+	return 0, 0, errors.New("unidentify rune " + string(r))
+}
+
+func MustTeamFromRune(r string) (Team, int) {
+	team, size, err := TeamFromRune(r)
+	if err != nil {
+		panic(err.Error())
+	}
+	return team, size
 }
 
 type User struct {
@@ -117,15 +129,12 @@ func (u User) IsMiss() bool {
 
 func UserFromString(s string) (u User) {
 	// TODO flag icon is composed of 2 runes but i work as if it is one
-	r, size := utf8.DecodeRune([]byte(s))
-	assert.Assert(r != utf8.RuneError)
-	if r == monsterRuneOnTurn {
-		u.Name = s[size+3:]
-	} else {
-		u.Name = s[size+4:]
-	}
-	u.Name = strings.TrimSpace(u.Name)
-	u.Team = TeamFromRune(r)
+	// r, size := utf8.DecodeRune([]byte(s))
+	// firstChar := mutf16.StringToUTF16(s)[0]
+	// assert.Assert(r != utf8.RuneError)
+	team, size := MustTeamFromRune(s)
+	u.Team = team
+	u.Name = s[size:]
 	return u
 }
 
